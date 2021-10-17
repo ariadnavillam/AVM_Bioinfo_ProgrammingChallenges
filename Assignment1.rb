@@ -1,118 +1,115 @@
-class HybridCross
-    attr_accessor :Parent1
-    attr_accessor :Parent1
-    attr_accessor :F2_Wild
-    attr_accessor :F2_P1
-    attr_accessor :F2_P1P2
-    attr_accessor :F2_P2
+require './gene'
+require './hybrid_cross'
+require './seed_stock'
 
-    def initialize (params = {})
-        @Parent1 = params.fetch(:Parent1, "X000")
-        @Parent2 = params.fetch(:Parent2, "X000")
-        @F2_Wild = params.fetch(:F2_Wild, "X000")
-        @F2_P1 = params.fetch(:F2_P1, "X000")
-        @F2_P2 = params.fetch(:F2_P2, "X000")
-        @F2_P1P2 = params.fetch(:F2_P1P2, "X000")
-    end
+def load_from_file(path_file)
+    count = 0
+    field_names = Array.new
+    data = Hash.new
+    if File.exist?(path_file)
+        File.open(path_file).each do |line|
+            column = line.strip.split("\t")
+            line_hash = Hash.new
+            if count == 0 then
+                column.each do |field|
+                    field_names.push(field.intern)
+                end
+            else 
+                i = 0 
+                column.each do |value|
+                    line_hash[field_names[i]] = value
+                    i += 1
+                end
 
-end
-
-
-class Gene
-    attr_accessor :Gene_ID
-    attr_accessor :Gene_name
-    attr_accessor :mutant_phenotype
-
-
-    def initialize (params = {})
-        @Gene_ID = params.fetch(:Gene_ID, "X000")
-        @Gene_name = params.fetch(:Gene_name, "X000")
-        @mutant_phenotype = params.fetch(:mutant_phenotype, "X000")
-    end
-
-    def print_all 
-        puts @Gene_ID, @Gene_name, @mutant_phenotype
-    end
-
-end
-
-class SeedStock
-    attr_accessor :Last_Planted
-    attr_accessor :Storage
-    attr_accessor :Grams_Remaining
-
-
-    def initialize (params = {})
-        @Last_Planted = params.fetch(:Last_Planted, "X000")
-        @Storage = params.fetch(:Storage, "X000")
-        @Grams_Remaining = params.fetch(:Grams_Remaining, "X000")
-    end
-
-    def gene_id=(new_id)
-        puts @Gene_ID, @Gene_name, @mutant_phenotype
-    end
-
-
-end
-
-#parse cross_data 
-path_file = "cross_data.tsv"
-count = 0
-field_names = Array.new
-data = Array.new
-if File.exist?(path_file)
-    File.open(path_file).each do |line|
-        column = line.strip.split("\t")
-        line_hash = Hash.new
-        if count == 0 then
-            column.each do |field|
-                field_names.push(field.intern)
+                data[line_hash[field_names[0]]] = line_hash
+                
             end
-        else 
-            i = 0 
-            column.each do |value|
-                line_hash[field_names[i]] = value
-                i += 1
-            end
-            data[count-1] = HybridCross.new(line_hash)
-            
+        
+            count+=1
         end
     
-        count+=1
+        return data
+
+    else
+        puts "Error. Could not open file #{path_file}."
     end
 end
 
-# parse gene file
+# Command line arguments error handling
+if ARGV.length != 4
+    puts "Wrong number of arguments."
+    puts "Input: $ ruby process_database.rb  gene_information.tsv  seed_stock_data.tsv  cross_data.tsv  new_stock_file.tsv"
+    exit(1)
+else 
+    count = 0
+    ARGV.each do |argument|
+        unless argument.to_s.match("\\.rb$") || argument.to_s.match("\\.tsv$")
+            puts "Wrong file #{argument}."
+            puts "Input: $ ruby process_database.rb  gene_information.tsv  seed_stock_data.tsv  cross_data.tsv  new_stock_file.tsv"
+            exit(1)
+        end 
 
-path_file = "gene_information.tsv"
-count = 0
-field_names = Array.new
-data = Array.new
-if File.exist?(path_file)
-    File.open(path_file).each do |line|
-        column = line.strip.split("\t")
-        line_hash = Hash.new
-        #puts line
-        if count == 0 then
-            column.each do |field|
-                field_names.push(field.intern)
-            end
-        else 
-            i = 0 
-            column.each do |value|
-                line_hash[field_names[i]] = value
-                i += 1
-            end
-            data[count-1] = Gene.new(line_hash)
-            
+        unless File.exist?(argument) || count == 3
+            puts "Wrong file #{argument}: does not exist."
+            exit(0)
         end
-    
-        count+=1
+        
+        count +=1
     end
 end
 
-data.each do |item|
-    item.print_all
+#convert the hash returned by the load_from_file function into a hash of objects for:
+#the cross_data file that contains hybridcross 
+cross_data = load_from_file("cross_data.tsv")
+cross_data.each_key do |key|
+    cross_data[key] = HybridCross.new(cross_data[key])
+end
+#the gene_information file that contains the genes
+genes_data = load_from_file("gene_information.tsv")
+genes_data.each_key do |key|
+    genes_data[key] = Gene.new(genes_data[key])
+end
+#the seed_stock_data file that contains the relation between the seeds and the genes
+seedstock_data = load_from_file("seed_stock_data.tsv")
+seedstock_data.each_key do |key|
+    seedstock_data[key] = SeedStock.new(seedstock_data[key])
+end
+
+#plant 7 grams of each seed
+seedstock_data.each_key do |seed|
+    seedstock_data[seed].plant
+end
+
+# for each cross_data entry evaluate if the genes of the seeds are linked
+cross_data.each_key do |key|
+    parent_seeds = cross_data[key].get_parents
+    gene1 = genes_data[seedstock_data[parent_seeds[0]].get_gene]
+    gene2 = genes_data[seedstock_data[parent_seeds[1]].get_gene]
+    chi_square = cross_data[key].test_link
+    if chi_square > 7.18
+        puts
+        puts "Recording: #{gene1.get_name} is genetically linked with #{gene2.get_name} with chisquare score #{chi_square}."
+        puts
+        puts "Final Report: \n"
+        gene1.is_linked(gene2)
+        gene2.is_linked(gene1)
+    end
+end
+
+# write new seed stock data to the file
+File.open("file_new.tsv", "w") do |f| 
+    count = 0
+    first_line =Array.new
+    seedstock_data.each_pair do |key,value| #each key and value of the seed stock hash
+        if count == 0 #in the first line we need the name of each of the properties of the object as header
+            seedstock_data[key].instance_variables.each do |f|
+                first_line.push(f[1,f.length])
+            end
+            f.write(first_line.join("\t")+"\n")
+        end
+        f.write(value.get_properties)
+        count +=1
+    end 
 end
 
 
