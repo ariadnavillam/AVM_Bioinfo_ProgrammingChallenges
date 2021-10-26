@@ -73,19 +73,18 @@ def get_kegg_record(geneid)
     end
 end
 
-def get_kegg_path(interaction_network_array)
-    paths = Array.new 
-    interaction_network_array.each do |gene|
-        kegg = get_kegg_record(gene)
-        unless kegg == NIL
-            paths.concat(kegg.scan(/(ath[0-9]{5})\s+([A-Z].+$)/))
+def get_kegg_path(body)
+    match = body.scan(/(ath[0-9]{5})\s+([A-Z].+$)/)
+    if match.nil?
+        return NIL
+    else
+        kegg_path = Array.new
+        print match
+        match.each do |kegg|
+            kegg_path.append(Annotation.new({:ID => kegg[0], :name => kegg[1]}))
         end
+        return kegg_paths
     end
-
-    freq = paths.inject(Hash.new(0)) { |h,v| h[v] += 1; h }
-    network_kegg = paths.max_by { |v| freq[v] }
-
-    return network_kegg
 end
 
 def get_go_record(protid)
@@ -104,10 +103,14 @@ def get_go_terms(body)
     if match.nil?
         return NIL
     else 
-        return match
+        go_terms = Array.new
+        match.each do |go|
+            go_terms.append(Annotation.new({:ID => go[0], :name => go[1]}))
+        end
+        return go_terms
     end 
-
 end
+
 
 
 class Gene
@@ -140,14 +143,19 @@ end
 class InteractionNetwork
     attr_accessor :Interactors
 
-    def initialize(array)
-        @Interactors = array
+    def initialize(params)
+        @Interactors = params.fetch(:int_array)
     end
 
-    def get_interactors(uniprot_id)
-        if interactors.key(uniprot_id)
-            puts interactors
-        end
+    def add_interactors(array)
+        @Interactors.concat(array)
+    end
+
+    def add_interactor(interactor)
+        @Interactors.append(interactor)
+
+    def get_interactor_array
+        return @Interactors
     end
 end
 
@@ -160,9 +168,10 @@ class AnnotatedNetwork < InteractionNetwork
         @KEGG = params.fetch(:KEGG, "X000")
         @GO = params.fetch(:GO, "X000")     
         
-    end
+    end  
 
 end
+
 
 class Annotation 
     attr_accessor :ID
@@ -174,6 +183,7 @@ class Annotation
         @name = params.fetch(:name, "nameX")     
         
     end
+
 end 
 
 
@@ -223,33 +233,36 @@ end
 
 new_genes = Hash.new
 gene = "AT4g37610"
+prot = "Q6EJ98"
 
 get_interaction_genes("Q6EJ98", new_genes, 1)
 array = Array.new
 new_genes.each_value do |value|
-    array.append(value[:Gene_ID])
+    array.append(value[:Uniprot_ID])
 end
-inter_network = Hash.new
-inter_network[gene]= InteractionNetwork.new(array.uniq)
 
-paths = Array.new 
-array.each do |gene|
-    kegg = get_kegg_record(gene)
-    unless kegg == NIL
-        paths.concat(kegg.scan(/(ath[0-9]{5})\s+([A-Z].+$)/))
-    end
+inter_network = Hash.new
+inter_network[gene]= InteractionNetwork.new({:int_array => array.uniq})
+
+
+int_array = inter_network[gene].get_interactor_array
+paths = Array.new
+int_array.each do |prot|
+    record = get_kegg_record(prot)
+    paths.concat(get_go_terms(record))
 end
 
 freq = paths.inject(Hash.new(0)) { |h,v| h[v] += 1; h }
-network_kegg = paths.max_by { |v| freq[v] }
+max_path = paths.max_by { |v| freq[v] }
 
 terms = Array.new
-new_genes.each_key do |prot|
+int_array.each do |prot|
     go_rec = get_go_record(prot)
     terms.concat(get_go_terms(go_rec))
 end
-print terms.uniq
 
+go_terms = terms.uniq
 
-
-
+an_inter_network = Hash.new
+an_inter_network[gene] = AnnotatedNetwork.new({:int_array => inter_network[gene].get_interactor_array, :GO => go_terms, :KEGG =>max_path})
+end
