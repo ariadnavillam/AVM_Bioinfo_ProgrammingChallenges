@@ -27,26 +27,18 @@ def fetch(url, headers = {accept: "*/*"}, user = "", pass="")
     return response  # now we are returning 'False', and we will check that with an \"if\" statement in our main code
 end
 
-def get_embl_record(geneid)
-    $stderr.puts "calling http://www.ebi.ac.uk/Tools/dbfetch/dbfetch?db=ensemblgenomesgene&format=embl&id=#{geneid}"
-    if res = fetch("http://www.ebi.ac.uk/Tools/dbfetch/dbfetch?db=ensemblgenomesgene&format=embl&id=#{geneid}")
+def get_uniprot_id(geneid)
+    $stderr.puts "calling http://togows.org/entry/ebi-uniprot/#{geneid}/accessions"
+    if res = fetch("http://togows.org/entry/ebi-uniprot/#{geneid}/accessions")
       body = res.body
-      return body
+      accession = body.split("\t")
+      return accession[0]
     else
-      abort "COULDN'T RETRIEVE EMBL RECORD"
+      puts "COULDN'T RETRIEVE UNIPROT RECORD"
+      return NIL
     end
   end
 
-def get_uniprot_id(body)
-# /db_xref="Uniprot/SWISSPROT:P35631"
-    match = body.match(/\/db_xref="Uniprot\/SWISSPROT:([^"]+)"/)
-    if match.nil?
-        uniprotid = NilClass
-    else 
-        uniprotid = match[1]
-    end
-    return uniprotid  
-end
 
 def get_gene_name(body)
     # /locus_tag="AP1"
@@ -65,18 +57,58 @@ def get_int_record(protid)
       body = res.body
       return body
     else
-      abort "COULDN'T RETRIEVE EMBL RECORD"
+      puts "COULDN'T RETRIEVE INTACT RECORD"
+      return NIL
     end
-  end
-
-def get_proteins(body)
-    match = body.match(/$uniprotkb:\t/)
-    if match.nil?
-        uniprotid = NilClass
-    else 
-        puts match
-    end 
 end
+
+def get_kegg_record(geneid)
+    $stderr.puts "calling http://rest.kegg.jp/get/ath:#{geneid}"
+    if res = fetch("http://rest.kegg.jp/get/ath:#{geneid}")
+      body = res.body
+      return body
+    else
+      puts "COULDN'T RETRIEVE KEGG PATHWAY"
+      return NIL
+    end
+end
+
+def get_kegg_path(interaction_network_array)
+    paths = Array.new 
+    interaction_network_array.each do |gene|
+        kegg = get_kegg_record(gene)
+        unless kegg == NIL
+            paths.concat(kegg.scan(/(ath[0-9]{5})\s+([A-Z].+$)/))
+        end
+    end
+
+    freq = paths.inject(Hash.new(0)) { |h,v| h[v] += 1; h }
+    network_kegg = paths.max_by { |v| freq[v] }
+
+    return network_kegg
+end
+
+def get_go_record(protid)
+    $stderr.puts "calling https://www.ebi.ac.uk/QuickGO/services/annotation/search?includeFields=goName&geneProductId=#{protid}&aspect=biological_process&qualifier=involved_in"
+    if res = fetch("https://www.ebi.ac.uk/QuickGO/services/annotation/search?includeFields=goName&geneProductId=#{protid}&aspect=biological_process&qualifier=involved_in")
+      body = res.body
+      return body
+    else
+      puts "COULDN'T RETRIEVE GO RECORD"
+      return NIL
+    end
+end
+
+def get_go_terms(body)
+    match = body.scan(/"goId":"(GO:\d+)","goName":"([a-z ]+)","goEvidence"/)
+    if match.nil?
+        return NIL
+    else 
+        return match
+    end 
+
+end
+
 
 class Gene
     #initialize properties for gene object based on the fields of the tsv file
@@ -107,11 +139,9 @@ end
 
 class InteractionNetwork
     attr_accessor :Interactors
-    attr_accessor :GO_terms
-    attr_accessor :KEGG_path
 
-    def initialize
-    interactors = Hash.new()
+    def initialize(array)
+        @Interactors = array
     end
 
     def get_interactors(uniprot_id)
@@ -121,27 +151,30 @@ class InteractionNetwork
     end
 end
 
-class KEGG_pathway
-    attr_accessor :KEGG_ID
-    attr_accessor :KEGG_name
+class AnnotatedNetwork < InteractionNetwork
+    attr_accessor :KEGG
+    attr_accessor :GO
+
+    def initialize (params = {})
+        super(params)
+        @KEGG = params.fetch(:KEGG, "X000")
+        @GO = params.fetch(:GO, "X000")     
+        
+    end
+
+end
+
+class Annotation 
+    attr_accessor :ID
+    attr_accessor :name
 
     def initialize (params = {})
         
-        @KEGG_ID = params.fetch(:KEGG_ID, "X000")
-        @KEGG_name = params.fetch(:KEGG_name, "nameX")     
+        @ID = params.fetch(:ID, "X000")
+        @name = params.fetch(:name, "nameX")     
         
     end
-end
-
-class GO_term
-    attr_accessor :GO_ID
-    attr_accessor :GO_name
-    def initialize (params = {})    
-        @GO_ID = params.fetch(:GO_ID, "X000")
-        @GO_name = params.fetch(:GO_name, "nameX")     
-        
-    end
-end
+end 
 
 
 # File.open("genes.txt", "w") do |f|
@@ -160,6 +193,27 @@ end
 # end
 
 
+def get_interaction_genes(uniprot_id,new_genes_hash,n)
+    if n == 0
+        return
+    end
+    intact = get_int_record(uniprot_id)
+    unless intact == NIL
+        rows = intact.split("\n")
+        rows.each do |row|
+            prots = row.scan(/^uniprotkb:(\w+)\tuniprotkb:(\w+)/).flatten
+            locus = row.scan(/uniprotkb:(A\w+)\(locus name\)/).flatten
+            name = row.scan(/uniprotkb:(\w+)\(gene name\)/).flatten
+            [0,1].each do |i|
+                unless prots[i] == uniprot_id
+                    new_genes_hash[prots[i]] = {:Uniprot_ID => prots[i], :Gene_ID => locus[i], :Gene_name => name[i]}
+                    get_interaction_genes(prots[i], new_genes_hash, n-1)
+                end
+            end
+        end
+    end
+end
+
 genes = Hash.new
 File.open("genes.txt", "r").each do |f|
     row = f.strip.split("\t")
@@ -167,17 +221,35 @@ File.open("genes.txt", "r").each do |f|
     genes[row[0]] = Gene.new(h)
 end
 
-genes.each_key do |key|
-    intact = get_int_record(genes[key].get_uniprot_id)
-    fields = intact.split("\t")
-    puts fields[0], fields[1]
+new_genes = Hash.new
+gene = "AT4g37610"
 
+get_interaction_genes("Q6EJ98", new_genes, 1)
+array = Array.new
+new_genes.each_value do |value|
+    array.append(value[:Gene_ID])
+end
+inter_network = Hash.new
+inter_network[gene]= InteractionNetwork.new(array.uniq)
+
+paths = Array.new 
+array.each do |gene|
+    kegg = get_kegg_record(gene)
+    unless kegg == NIL
+        paths.concat(kegg.scan(/(ath[0-9]{5})\s+([A-Z].+$)/))
+    end
 end
 
+freq = paths.inject(Hash.new(0)) { |h,v| h[v] += 1; h }
+network_kegg = paths.max_by { |v| freq[v] }
 
+terms = Array.new
+new_genes.each_key do |prot|
+    go_rec = get_go_record(prot)
+    terms.concat(get_go_terms(go_rec))
+end
+print terms.uniq
 
-
-# puts response.body
 
 
 
