@@ -1,5 +1,4 @@
 require 'rest-client'  
-
 require 'json'
 
 def fetch(url, headers = {accept: "*/*"}, user = "", pass="")
