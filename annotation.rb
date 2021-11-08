@@ -10,7 +10,7 @@ class Annotation
     end
 
     def get_annotation
-        return "#{@ID}:#{@name}"
+        return "#{@ID} (#{@name})"
     end
 
 end 

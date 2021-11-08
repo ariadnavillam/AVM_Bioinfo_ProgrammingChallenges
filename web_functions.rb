@@ -86,7 +86,7 @@ def get_go_terms(body)
     end 
 end
 
-def get_interaction_genes(gene_id, origin_genes, new_genes_array, ini_gene, n)
+def get_interaction_genes(gene_id, origin_genes, new_genes_array, ini_gene, n, score_limit = 0.0)
     if n == 0
         return
     end
@@ -97,13 +97,15 @@ def get_interaction_genes(gene_id, origin_genes, new_genes_array, ini_gene, n)
             prots = row.scan(/^uniprotkb:(\w+)\tuniprotkb:(\w+)/).flatten
             locus = row.scan(/uniprotkb:(A\w+)\(locus name\)/).flatten
             name = row.scan(/uniprotkb:(\w+)\(gene name\)/).flatten
-            score = row.scan(/intact-miscore:([0-9\.]+)/)[0][0]
-            [0,1].each do |i|
-                if origin_genes.key?(locus[i]) && locus[i] != gene_id
-                  new_genes_array.append([locus[i], prots[i], name[i]])
-                else
-                  get_interaction_genes(locus[i], origin_genes, new_genes_array, ini_gene, n-1)
-                end
+            score = row.scan(/intact-miscore:([0-9\.]+)/)
+            if score[0][0].to_f > score_limit
+              [0,1].each do |i|
+                  if origin_genes.key?(locus[i]) && locus[i] != gene_id
+                    new_genes_array.append([locus[i], prots[i], name[i]])
+                  else
+                    get_interaction_genes(locus[i], origin_genes, new_genes_array, ini_gene, n-1, score_limit)
+                  end
+              end
             end
         end
     end
