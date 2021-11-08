@@ -16,6 +16,11 @@ class InteractionNetwork
     def get_interactors_array
         return @Interactors
     end
+
+    def get_network_size
+        return @Interactors.length
+    end
+    
 end
 
 class AnnotatedNetwork < InteractionNetwork

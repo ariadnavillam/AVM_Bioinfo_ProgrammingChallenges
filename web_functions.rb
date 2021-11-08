@@ -31,7 +31,7 @@ def get_int_record(geneid)
       body = res.body
       return body
     else
-      puts "COULDN'T RETRIEVE INTACT RECORD"
+      $stderr.puts "COULDN'T RETRIEVE INTACT RECORD"
       return NIL
     end
 end
@@ -42,7 +42,7 @@ def get_kegg_record(geneid)
       body = res.body
       return body
     else
-      puts "COULDN'T RETRIEVE KEGG PATHWAY"
+      $stderr.puts "COULDN'T RETRIEVE KEGG PATHWAY"
       return NIL
     end
 end
@@ -67,7 +67,7 @@ def get_go_record(protid)
       body = res.body
       return body
     else
-      puts "COULDN'T RETRIEVE GO RECORD"
+      $stderr.puts "COULDN'T RETRIEVE GO RECORD"
       return NIL
     end
 end
@@ -86,7 +86,7 @@ def get_go_terms(body)
     end 
 end
 
-def get_interaction_genes(gene_id, origin_genes, new_genes_array, ini_gene, n, score_limit = 0.0)
+def get_interaction_genes(gene_id, origin_genes, new_genes_array, ini_gene, n, score_limit)
     if n == 0
         return
     end

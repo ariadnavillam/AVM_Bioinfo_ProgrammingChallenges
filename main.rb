@@ -12,9 +12,10 @@ $stderr.reopen("log.txt", "w")
 
 # Command line arguments error handling
 #Correct number of arguments?
-puts ARGV.length
+
 if ARGV.length >= 2 && ARGV.length <= 4
     if ARGV.length > 2 
+        
         begin 
             miscore = ARGV[2].to_f
         rescue
@@ -23,16 +24,27 @@ if ARGV.length >= 2 && ARGV.length <= 4
             puts "Default value = 0.45"
             exit(1)
         end
-    elsif ARGV.length == 4
-        begin 
-            depth = ARGV[3].to_i
-        rescue
-            puts "Error. Please enter a correct depth value."
-            puts "The depth value is between 1 and 3."
-            puts "1 -> direct interaction, 2 -> interaction by 1 gene, 3 -> interaction by 2 genes."
-            puts "Default value = 3"
-            exit(1)
+        
+        if ARGV.length == 4
+            print "b"
+            begin 
+                depth = ARGV[3].to_i
+                print depth
+            rescue
+                puts "Error. Please enter a correct depth value."
+                puts "The depth value is between 1 and 3."
+                puts "1 -> direct interaction, 2 -> interaction by 1 gene, 3 -> interaction by 2 genes."
+                puts "Default value = 3."
+                exit(1)
+            end
+        else
+            depth = 3
         end
+
+    else
+        print "c"
+        miscore = 0.45
+        depth = 3
     end
 
 else 
@@ -54,7 +66,8 @@ out_path = ARGV[1]
 puts "File with genes: #{file_path}"
 puts "Output file: #{out_path}"
 puts "Intact-miscore filter: #{miscore}"
-puts 
+puts "Depth of search: #{depth}"
+puts
 
 #save gene names in hash
 origin_genes = Hash.new
@@ -70,7 +83,7 @@ gene_information = Hash.new #save protid and name for each gene
 origin_genes.each_key do |gene_key|
     puts "Searching for genes that interact with #{gene_key}" #since the run time is long we print a message when we change the gene
     new_genes = Array.new #array to save the genes that interact
-    get_interaction_genes(gene_key, origin_genes, new_genes, gene_key, 3, 0.45) #recursive function
+    get_interaction_genes(gene_key, origin_genes, new_genes, gene_key, depth, miscore) #recursive function
     int_genes = Array.new
     new_genes.each do |new_gene|
         int_genes.append(new_gene[0]) unless new_gene[0] == gene_key #save genes id (index 0) except if the gene is the starting gene
@@ -138,7 +151,7 @@ inter_network_array.each do |inter_network| #for each network
     annotated_network_array.append(AnnotatedNetwork.new({:int_array => inter_network.get_interactors_array, :GO => go_terms, :KEGG =>max_path}))
 end
 
-
+puts
 i = 0
 File.open("output.txt", "w") do |f| 
     if annotated_network_array.length == 0
@@ -168,7 +181,8 @@ File.open("output.txt", "w") do |f|
             end
             f.write("\n-----------------------------------------------------\n")
         end
+        puts "THE END. Please check #{out_path} for results."
     end
 end
-puts
-puts "THE END. Please check #{out_path} for results."
+
+
