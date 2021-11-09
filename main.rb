@@ -26,7 +26,6 @@ if ARGV.length >= 2 && ARGV.length <= 4
         end
         
         if ARGV.length == 4
-            print "b"
             begin 
                 depth = ARGV[3].to_i
                 print depth
@@ -42,7 +41,6 @@ if ARGV.length >= 2 && ARGV.length <= 4
         end
 
     else
-        print "c"
         miscore = 0.45
         depth = 3
     end
@@ -79,9 +77,11 @@ end
 
 #retrieve genes that interact
 puts
+i = 0
 gene_information = Hash.new #save protid and name for each gene
 origin_genes.each_key do |gene_key|
-    puts "Searching for genes that interact with #{gene_key}" #since the run time is long we print a message when we change the gene
+    i+=1
+    puts "Searching for genes that interact with #{gene_key} (#{i}/#{origin_genes.length})" #since the run time is long we print a message when we change the gene
     new_genes = Array.new #array to save the genes that interact
     get_interaction_genes(gene_key, origin_genes, new_genes, gene_key, depth, miscore) #recursive function
     int_genes = Array.new
@@ -90,12 +90,15 @@ origin_genes.each_key do |gene_key|
         gene_information[new_gene[0]] = Gene.new({:Gene_ID => new_gene[0], :Uniprot_ID => new_gene[1], :Gene_name => new_gene[2]}) unless gene_information.key?(new_gene) 
         #save gene id, uniprot id and gene name
     end
-    origin_genes[gene_key] = int_genes #save interacting genes in hash
+    origin_genes[gene_key] = int_genes.compact #save interacting genes in hash
 end
 
 # save the network only in one array
-origin_genes.each_pair do |key, value|
-    value.each do |int_gene|
+# if A interacts with B and B with C and this information is divided in two different arrays so that 
+# interactors[A] = B, interactors[B] = C
+# then this code turns it into interactors[A]=B,C so that only a network is created
+origin_genes.each_key do |key|
+    origin_genes[key].each do |int_gene|
         origin_genes[key] = origin_genes[key] + origin_genes[int_gene] #merge all interacting genes in one array, so that there isnt any gene in various networks
         origin_genes[int_gene] = [] #save the array in the previous key and delete the value for every interactor
 
@@ -107,10 +110,11 @@ inter_network_array = Array.new
 origin_genes.each_pair do |key, value|
     if value.length > 0 #if there is some interactor save the values
         array = value
-        array.append(key) #append the key in case there is not already in the array
-        inter_network_array.append(InteractionNetwork.new({:int_array => array.uniq})) #save unique values of each gene
+        array.append(key) #append the key in case it is not already in the array
+        inter_network_array.append(InteractionNetwork.new({:int_array => array.uniq})) #save unique values of each gene for each interaction network object
     end
 end
+
 puts
 puts "Annotating the networks of genes..."
 #annotate the network
@@ -122,24 +126,26 @@ inter_network_array.each do |inter_network| #for each network
         record = get_kegg_record(geneid)
         paths.concat(get_kegg_path(record)) #save all kegg from all the genes
     end
-
+    #count the number of times a path is in the array and get the one with the maximum value
     unless paths.length == 0
         freq = paths.inject(Hash.new(0)) { |h,v| h[v] += 1; h }
         max_path = paths.max_by { |v| freq[v] }
     else
-        max_path = "Not found"
+        max_path = "Not found" #if no paths are found the output says not found
     end
 
-    #keep only the most frequent one between the genes interacting
+    #keep only the most frequent go terms between the genes interacting
     terms = Array.new
     int_array.each do |geneid|
         go_rec = get_go_record(gene_information[geneid].get_uniprot_id) unless gene_information[geneid].nil?
         terms.concat(get_go_terms(go_rec)) unless go_rec.nil?
     end
+    #again this code calculates the frecuencies of each term and gets the 5 most common
     freq = terms.inject(Hash.new(0)) { |h,v| h[v] += 1; h }
     temp = freq.sort_by(&:last)
     terms = temp.last(5)
     
+    #save the go terms as annotations
     go_terms = Array.new
     terms.each do |go_term, freq|
         go_terms.append(Annotation.new(go_term))
@@ -147,11 +153,12 @@ inter_network_array.each do |inter_network| #for each network
     if go_terms.length == 0
         go_terms = "Not found"
     end
-
+    #save the information for each interaction network with its annotations
     annotated_network_array.append(AnnotatedNetwork.new({:int_array => inter_network.get_interactors_array, :GO => go_terms, :KEGG =>max_path}))
 end
 
 puts
+#print the output file with all the networks
 i = 0
 File.open("output.txt", "w") do |f| 
     if annotated_network_array.length == 0
@@ -162,14 +169,23 @@ File.open("output.txt", "w") do |f|
         annotated_network_array.each do |network|
             i+=1
             f.write("Network #{i}\n")
-            f.write("Gene list: #{network.get_interactors_array.join(", ")}\n")
+            f.write("Number of interactors: #{network.get_network_size}\n")
+            out = Array.new
+            network.get_interactors_array.each do |id|
+                if gene_information.key?(id) && gene_information[id].nil? == FALSE && gene_information[id].get_name.nil? == FALSE
+                    out.append(id + " ("+ gene_information[id].get_name + ")" )
+                else
+                    out.append(id)
+                end
+            end
+            f.write("Gene list:\n #{out.join("\n ")}\n")
             f.write("KEGG pathway: ")
             if network.get_kegg == "Not found"
                 f.write("Not found\n")
             else
                 f.write(network.get_kegg.get_annotation+"\n") 
             end 
-            f.write("GO terms: ")
+            f.write("GO terms: \n ")
             if network.get_go == "Not found"
                 f.write("Not found")
             else
@@ -177,7 +193,7 @@ File.open("output.txt", "w") do |f|
                 network.get_go.each do |go|
                     terms.append(go.get_annotation) unless network.get_go.nil?
                 end
-                f.write(terms.join(", "))
+                f.write(terms.join("\n "))
             end
             f.write("\n-----------------------------------------------------\n")
         end
