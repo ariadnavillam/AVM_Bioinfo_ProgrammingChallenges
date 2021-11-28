@@ -1,0 +1,16 @@
+'''
+          position = feature.position.split(":")[1]
+          exon_id = feature.assoc["note"]
+          new_gene_id = exon_id.scan(/exon_id=(A[Tt]\d[Gg]\d\d\d\d\d)/).flatten[0]
+          url = "http://www.ebi.ac.uk/Tools/dbfetch/dbfetch?db=ensemblgenomesgene&format=embl&id=#{new_gene_id}"
+          res = fetch(url)
+          puts
+          puts url
+          new_emblfile = Bio::FlatFile.new(Bio::EMBL, StringIO.new(res.body))
+          new_emblfile.each_entry do |new_entry|
+            next unless new_entry.accession
+            seq = new_entry.to_biosequence
+            
+            exon_seq = seq.splice(position)
+          end
+          '''
