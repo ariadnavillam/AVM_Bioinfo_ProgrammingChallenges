@@ -1,0 +1,59 @@
+'''
+          position = feature.position.split(":")[1]
+          exon_id = feature.assoc["note"]
+          new_gene_id = exon_id.scan(/exon_id=(A[Tt]\d[Gg]\d\d\d\d\d)/).flatten[0]
+          url = "http://www.ebi.ac.uk/Tools/dbfetch/dbfetch?db=ensemblgenomesgene&format=embl&id=#{new_gene_id}"
+          res = fetch(url)
+          puts
+          puts url
+          new_emblfile = Bio::FlatFile.new(Bio::EMBL, StringIO.new(res.body))
+          new_emblfile.each_entry do |new_entry|
+            next unless new_entry.accession
+            seq = new_entry.to_biosequence
+            
+            exon_seq = seq.splice(position)
+          end
+          '''
+          positions_comp = exon_seq.enum_for(:scan, /(?=(gaagaa))/).map { Regexp.last_match.begin(0) }
+        positions_comp.each do |index|
+          next if index.nil?
+          if strand == "+"
+            loc = "#{ex_ini.to_i+index}..#{ex_ini.to_i+index+5}"
+            strand = "-"
+          else
+            loc = "complement(#{ex_fin.to_i-index-5}..#{ex_fin.to_i-index})"
+            strand = "+"
+          end
+          motifs.append([loc,strand, "gaagaa"])
+        end
+      end
+      
+      #{feature.assoc.map { |key, value| key+"="+value }.join(";")
+
+      positions = exon_seq.enum_for(:scan, /(?=(aagaag))/).map { Regexp.last_match.begin(0)} 
+        positions.each do |index|
+          next if index.nil?
+          if strand == "+"
+            
+          else
+            loc = "#{ex_fin.to_i-index-5}..#{ex_fin.to_i-index}"
+            n_strand ="+"
+          end
+          d_key = [loc,n_strand]
+
+          positions = exon_seq.enum_for(:scan, /(?=(cttctt))/).map { Regexp.last_match.begin(0)} 
+          positions.each do |index|
+            next if index.nil?
+            if strand == "+"
+              loc = "#{ex_ini.to_i+index}..#{ex_ini.to_i+index+5}"
+            else
+              loc = "complement(#{ex_fin.to_i-index-5}..#{ex_fin.to_i-index})"
+            end
+            d_key = [loc,strand]
+
+
+            #{feature.assoc["notes"]};
+
+            output_array = [chr_number,".", feature.feature, chr_ini.to_i+ini-1,chr_ini.to_i+fin-1,".", feature.assoc["strand"],".",feature.assoc["notes"]]
+        chrgff_output.puts output_array.join("\t")
+        output_array = [geneid,".", "repeat",ini,fin,".",feature.assoc["strand"],".",feature.assoc["notes"]]
